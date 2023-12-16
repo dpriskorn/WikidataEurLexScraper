@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "wikidataeurlexscraper"
+version = "0.1.0"
+description = ""
+authors = ["Dennis Priskorn <egils@riseup.net>"]
+license = "GPLv3+"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.13"
+pydantic = "^2.5.2"
+beautifulsoup4 = "^4.12.2"
+requests = "^2.31.0"
+wikibaseintegrator = "^0.12.4"
+
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.12.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
