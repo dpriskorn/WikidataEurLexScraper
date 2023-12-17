@@ -5,6 +5,7 @@ There are 4594 items with this identifier right now.
 It currently only scrapes the name of the law"""
 import logging
 import sqlite3
+from pprint import pprint
 from typing import List, Any
 
 import requests
@@ -14,7 +15,7 @@ from pydantic import BaseModel
 from wikibaseintegrator import WikibaseIntegrator
 from wikibaseintegrator.datatypes import MonolingualText, URL, Time
 from wikibaseintegrator.entities import ItemEntity
-from wikibaseintegrator.models import References, Qualifiers
+from wikibaseintegrator.models import References, Qualifiers, Reference
 from wikibaseintegrator.wbi_config import config as wbconfig
 from wikibaseintegrator.wbi_enums import ActionIfExists
 from wikibaseintegrator.wbi_helpers import execute_sparql_query
@@ -123,6 +124,7 @@ class LawItem(BaseModel):
         self.add_labels_and_aliases()
         self.add_name_statements()
         if self.something_to_upload:
+            pprint(self.item.get_json())
             input("press enter to upload")
             self.item.write(
                 summary="Adding names with [[Wikidata:Tools/WikidataEurLexScraper|WikidataEurLexScraper]]"
@@ -183,21 +185,21 @@ class LawItem(BaseModel):
                     logger.info("this title is already in Wikidata")
 
     def add_name_claim(self, title: Title):
-        # logger.info("Add name statement")
-        self.item.claims.add(claims=[MonolingualText(
-                prop_nr="P1448",  # official name
-                language=title.language.lower(),
-                text=title.title,
-                references=References().add(
-                    URL(
-                        prop_nr="P854",  # reference URL
-                        value=title.eurlex_url,
-                        qualifiers=Qualifiers().add(Time(prop_nr="P813",  # retrieved
-                                                         time="now")),
-                    )
-                ),
-            )],
-            action_if_exists=ActionIfExists.KEEP,
+        reference = Reference()
+        reference.add(URL(prop_nr="P854", value=title.eurlex_url))  # reference URL
+        reference.add(Time(prop_nr="P813", time="now"))  # retrieved
+        references = References().add(reference)
+        name_claim = MonolingualText(
+            prop_nr="P1448",  # official name
+            language=title.language.lower(),
+            text=title.title,
+            references=references,
+        )
+        # pprint(name_claim.get_json())
+        # exit()
+        self.item.claims.add(
+            claims=[name_claim],
+            action_if_exists=ActionIfExists.APPEND_OR_REPLACE,
         )
 
     def scrape_law_titles(self):
