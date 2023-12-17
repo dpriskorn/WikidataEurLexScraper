@@ -5,22 +5,21 @@ There are 4594 items with this identifier right now.
 It currently only scrapes the name of the law"""
 import logging
 import sqlite3
-from sqlite3 import IntegrityError
 from typing import List, Any
 
 import requests
 from bs4 import BeautifulSoup
 from pydantic import BaseModel
 from wikibaseintegrator import WikibaseIntegrator
-from wikibaseintegrator.wbi_helpers import execute_sparql_query
 from wikibaseintegrator.wbi_config import config as wbconfig
+from wikibaseintegrator.wbi_helpers import execute_sparql_query
 from wikibaseintegrator.wbi_login import Login
 
 import config
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=config.loglevel)
 logger = logging.getLogger(__name__)
-wbconfig["USER_AGENT"] = "WikidataEurLexScraper by So9q"
+wbconfig["USER_AGENT"] = config.user_agent
 
 
 class Title(BaseModel):
