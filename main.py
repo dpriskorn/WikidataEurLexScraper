@@ -9,6 +9,7 @@ from typing import List, Any
 
 import requests
 from bs4 import BeautifulSoup
+from ftlangdetect import detect
 from pydantic import BaseModel
 from wikibaseintegrator import WikibaseIntegrator
 from wikibaseintegrator.wbi_config import config as wbconfig
@@ -25,10 +26,40 @@ wbconfig["USER_AGENT"] = config.user_agent
 class Title(BaseModel):
     title: str
     language: str
+    detected_language: str = ""
+    score: float = 0.0
 
     @property
-    def longer_than_wikidata_support(self):
+    def longer_than_wikidata_support(self) -> bool:
         return bool(len(self.title) > 250)
+
+    def detect_language(self) -> None:
+        # This returns a dict like so: {'lang': 'tr', 'score': 0.9982126951217651}
+        language_result = detect(text=self.title, low_memory=False)
+        self.detected_language = language_result["lang"]
+        self.score = language_result["score"]
+        if self.accepted_title:
+            logger.info(f"got good title for language {self.detected_language}")
+        else:
+            if self.languages_match:
+                logger.info(f"got title we do not accept because of low score of {self.score} for {self.detected_language}")
+            else:
+                logger.info(f"Eur-Lex language {self.language} and detected language {self.detected_language} did not match")
+                logger.debug(f"for title {self.title} with score: {self.score}")
+
+    @property
+    def languages_match(self) -> bool:
+        return bool(self.language.lower() == self.detected_language)
+
+    @property
+    def accepted_title(self) -> bool:
+        """We accept scores over 0.4 for mt and 0.7 for all others"""
+        if self.languages_match:
+            if self.detected_language == "mt" and self.score > 0.4:
+                return True
+            elif self.detected_language != "mt" and self.score > 0.7:
+                return True
+        return False
 
 
 class LawItem(BaseModel):
@@ -82,39 +113,38 @@ class LawItem(BaseModel):
             for title in self.titles:
                 if title.language == language:
                     if title.longer_than_wikidata_support:
-                        print(f"title too long: '{title.title}'")
+                        logger.info(f"title too long: '{title.title}'")
                     else:
                         title_for_this_language = title
-            label = item.labels.get(language=language.lower())
-            if label:
-                has_label = True
-                if label == title_for_this_language.title:
-                    print("label for this language in "
-                          "wikidata mathches the title, skipping this language")
-                    title_already_in_wikidata = True
-                    break
+            if title_for_this_language is not None:
+                label = item.labels.get(language=language.lower())
+                if label:
+                    has_label = True
+                    if label == title_for_this_language.title:
+                        logger.info(f"label for {language_lower} in "
+                                    "wikidata mathches the title, skipping this language")
+                        title_already_in_wikidata = True
+                    if not title_already_in_wikidata:
+                        logger.info(f"checking {language_lower} aliases")
+                        aliases = item.aliases.get(language=language_lower)
+                        if aliases:
+                            logger.info(aliases)
+                            for alias in aliases:
+                                if alias == title_for_this_language.title:
+                                    title_already_in_wikidata = True
+                if not title_already_in_wikidata:  # and title_for_this_language.title
+                    something_to_upload = True
+                    # we are missing this data in Wikidata, lets add it
+                    if not has_label:
+                        # add as label
+                        item.labels.set(value=title_for_this_language.title,
+                                        language=language_lower)
+                    else:
+                        # add as alias
+                        item.aliases.set(values=[title_for_this_language.title],
+                                         language=language_lower)
                 else:
-                    print(label)
-                print("checking aliases")
-                aliases = item.aliases.get(language=language_lower)
-                if aliases:
-                    print(aliases)
-                    for alias in aliases:
-                        if alias == title_for_this_language.title:
-                            title_already_in_wikidata = True
-            if not title_already_in_wikidata: #  and title_for_this_language.title
-                something_to_upload = True
-                # we are missing this data in Wikidata, lets add it
-                if not has_label:
-                    # add as label
-                    item.labels.set(value=title_for_this_language.title,
-                                    language=language_lower)
-                else:
-                    # add as alias
-                    item.aliases.set(values=[title_for_this_language.title],
-                                     language=language_lower)
-            else:
-                print("this title is already in Wikidata")
+                    logger.info("this title is already in Wikidata")
         if something_to_upload:
             input("press enter to upload")
             item.write(summary="Adding labels and aliases "
@@ -139,7 +169,10 @@ class LawItem(BaseModel):
                 law_title = soup.select_one("p#title").get_text(strip=True)
                 # Guard against None
                 if law_title and law_title is not None:
-                    self.titles.append(Title(title=law_title, language=language))
+                    title = Title(title=law_title, language=language)
+                    title.detect_language()
+                    if title.accepted_title:
+                        self.titles.append(title)
                 else:
                     raise ValueError(f"no law title found, see {url}")
             else:
@@ -175,7 +208,7 @@ class EurlexScraper(BaseModel):
 
         # Fetching items from the query result
         for result in query['results']['bindings']:
-            item_id = self.get_stripped_qid(id=str(result['item']['value']))
+            item_id = self.get_stripped_qid(item_id=str(result['item']['value']))
             celex_id = result['celex_id']['value']
             self.items.append(LawItem(item_id=item_id, celex_id=celex_id, wbi=self.wbi))
 
@@ -195,8 +228,8 @@ class EurlexScraper(BaseModel):
         return bool(count > 0)
 
     @staticmethod
-    def get_stripped_qid(id: str) -> str:
-        return id.replace("http://www.wikidata.org/entity/", "")
+    def get_stripped_qid(item_id: str) -> str:
+        return item_id.replace("http://www.wikidata.org/entity/", "")
 
     def connect(self):
         # Connect to a database (creates if not exists)
@@ -236,6 +269,7 @@ class EurlexScraper(BaseModel):
         self.cursor.execute('SELECT COUNT(item_id) FROM processed')
         count = self.cursor.fetchone()[0]
         print(f"{count} item_ids found in the database")
+
 
 # Example usage:
 # celex_id = "32012L0013"
