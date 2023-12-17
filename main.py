@@ -279,16 +279,12 @@ class EurlexScraper(BaseModel):
         self.conn.commit()
 
     def add_item_id_to_database(self, item_id: int):
-        # try:
         self.cursor.execute(
             """
             INSERT INTO processed (item_id) VALUES (?)
         """,
             (item_id,),
         )
-        # except IntegrityError:
-        #     # skip silently if item_id already exists
-        #     pass
         self.conn.commit()
 
     def get_count_of_done_item_ids(self):
