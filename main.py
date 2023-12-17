@@ -4,7 +4,9 @@ query https://query.wikidata.org/#SELECT%20%28COUNT%28%3Fitem%29%20AS%20%3Fcount
 There are 4594 items with this identifier right now.
 It currently only scrapes the name of the law"""
 import logging
-from typing import List
+import sqlite3
+from sqlite3 import IntegrityError
+from typing import List, Any
 
 import requests
 from bs4 import BeautifulSoup
@@ -72,6 +74,7 @@ class LawItem(BaseModel):
     def enrich_wikidata(self):
         something_to_upload = False
         item = self.wbi.item.get(entity_id=self.item_id)
+        print(item.get_entity_url())
         for language in self.languages:
             language_lower = language.lower()
             title_already_in_wikidata = False
@@ -88,7 +91,7 @@ class LawItem(BaseModel):
                 has_label = True
                 if label == title_for_this_language.title:
                     print("label for this language in "
-                          "wikidata mathches the title, skipping")
+                          "wikidata mathches the title, skipping this language")
                     title_already_in_wikidata = True
                     break
                 else:
@@ -100,7 +103,7 @@ class LawItem(BaseModel):
                     for alias in aliases:
                         if alias == title_for_this_language.title:
                             title_already_in_wikidata = True
-            if not title_already_in_wikidata:
+            if not title_already_in_wikidata: #  and title_for_this_language.title
                 something_to_upload = True
                 # we are missing this data in Wikidata, lets add it
                 if not has_label:
@@ -135,7 +138,8 @@ class LawItem(BaseModel):
 
                 # Find the element containing the law title using the provided jQuery selector
                 law_title = soup.select_one("p#title").get_text(strip=True)
-                if law_title:
+                # Guard against None
+                if law_title and law_title is not None:
                     self.titles.append(Title(title=law_title, language=language))
                 else:
                     raise ValueError(f"no law title found, see {url}")
@@ -144,6 +148,8 @@ class LawItem(BaseModel):
 
 
 class EurlexScraper(BaseModel):
+    conn: Any = None
+    cursor: Any = None
     sparql_query: str = """
     SELECT ?item ?celex_id
     WHERE {
@@ -158,7 +164,12 @@ class EurlexScraper(BaseModel):
 
     def start(self):
         self.fetch_items()
+        self.connect()
+        self.get_cursor()
+        self.create_db()
+        self.get_count_of_done_item_ids()
         self.iterate_items()
+        self.conn.close()
 
     def fetch_items(self):
         query = execute_sparql_query(self.sparql_query)
@@ -171,13 +182,61 @@ class EurlexScraper(BaseModel):
 
     def iterate_items(self):
         for item in self.items:
-            item.start()
-            exit()
+            item_id = int(item.item_id[1:])
+            if not self.already_processed(item_id=item_id):
+                item.start()
+                self.add_item_id_to_database(item_id=item_id)
+                # exit()
+            else:
+                print(f"{item.item_id} has already been processed")
+
+    def already_processed(self, item_id) -> bool:
+        self.cursor.execute('SELECT COUNT(item_id) FROM processed WHERE item_id = ?', (item_id,))
+        count = self.cursor.fetchone()[0]
+        return bool(count > 0)
 
     @staticmethod
     def get_stripped_qid(id: str) -> str:
         return id.replace("http://www.wikidata.org/entity/", "")
 
+    def connect(self):
+        # Connect to a database (creates if not exists)
+        self.conn = sqlite3.connect('database.db')
+
+    def get_cursor(self):
+        # Create a cursor object to execute SQL commands
+        self.cursor = self.conn.cursor()
+
+    def create_db(self):
+        # Create a table named 'processed' with a column 'item_id'
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS processed (
+                item_id INTEGER PRIMARY KEY
+            )
+        ''')
+
+        # Create an index on the 'item_id' column
+        self.cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_item_id ON processed (item_id)
+        ''')
+
+        # Commit changes and close the connection
+        self.conn.commit()
+
+    def add_item_id_to_database(self, item_id: int):
+        # try:
+        self.cursor.execute('''
+            INSERT INTO processed (item_id) VALUES (?)
+        ''', (item_id,))
+        # except IntegrityError:
+        #     # skip silently if item_id already exists
+        #     pass
+        self.conn.commit()
+
+    def get_count_of_done_item_ids(self):
+        self.cursor.execute('SELECT COUNT(item_id) FROM processed')
+        count = self.cursor.fetchone()[0]
+        print(f"{count} item_ids found in the database")
 
 # Example usage:
 # celex_id = "32012L0013"
