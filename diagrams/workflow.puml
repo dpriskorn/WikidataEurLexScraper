@@ -1,0 +1,36 @@
+@startuml
+'https://plantuml.com/activity-diagram
+@startuml
+
+start
+:fetch all Wikidata items with a CELEX identifier (~4500);
+repeat
+:fetch item using WikibaseIntegrator;
+if (item has already been processed using sqlite database) then (yes)
+
+else (no)
+    :fetch titles in all languages;
+    repeat :for each title fetched;
+    :detect language of title using fasttext langdetect;
+    if (languages match) then (yes)
+        if (language == maltese and score > 0.4 or language != maltese and score > 0.7) then (accepted)
+            if (the fetched eur-lex title is missing from label or aliases in this language) then (yes)
+                if (item has no label) then (true)
+                  :add title as label to item;
+                else (false)
+                  :add title as alias to item;
+                endif
+            else (no)
+            endif
+        else (not accepted)
+        endif
+    else (no)
+    endif
+    repeat while (more titles) is (yes)
+endif
+repeat while (more items?) is (yes)
+->no;
+
+stop
+
+@enduml
