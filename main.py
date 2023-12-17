@@ -68,7 +68,7 @@ class Title(BaseModel):
 
 
 class LawItem(BaseModel):
-    something_to_upload = False
+    something_to_upload: bool = False
     item: ItemEntity = None
     wbi: WikibaseIntegrator
     item_id: str
@@ -297,15 +297,8 @@ class EurlexScraper(BaseModel):
         print(f"{count} item_ids found in the database")
 
 
-# Example usage:
-# celex_id = "32012L0013"
 wbi = WikibaseIntegrator(
     login=Login(user=config.user_name, password=config.bot_password)
 )
 scraper = EurlexScraper(wbi=wbi)
 scraper.start()
-# item = LawItem(item_id="", celex_id=celex_id, wbi=wbi)
-# item.start()
-# for title in item.titles:
-#     print(f"The law title for CELEX:{celex_id} "
-#           f"and language {title.language} is: {title.title}")
