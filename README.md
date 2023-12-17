@@ -9,7 +9,7 @@ information scraped from Eur-Lex
 
 ## Impact
 There are a mean of 10 name statements missing from these law items.
-This amounts to 7500*10=75.000 new statements
+This amounts to 4500*10=45.000 new statements
 
 ## TODO
 * support devising main theme statements based on a summary of the law
