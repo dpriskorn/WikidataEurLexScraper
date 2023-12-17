@@ -12,8 +12,11 @@ from bs4 import BeautifulSoup
 from ftlangdetect import detect
 from pydantic import BaseModel
 from wikibaseintegrator import WikibaseIntegrator
+from wikibaseintegrator.datatypes import MonolingualText, URL, Time
 from wikibaseintegrator.entities import ItemEntity
+from wikibaseintegrator.models import References, Qualifiers
 from wikibaseintegrator.wbi_config import config as wbconfig
+from wikibaseintegrator.wbi_enums import ActionIfExists
 from wikibaseintegrator.wbi_helpers import execute_sparql_query
 from wikibaseintegrator.wbi_login import Login
 
@@ -27,8 +30,16 @@ wbconfig["USER_AGENT"] = config.user_agent
 class Title(BaseModel):
     title: str
     language: str
+    celex_id: str
     detected_language: str = ""
     score: float = 0.0
+
+    @property
+    def eurlex_url(self):
+        return (
+            f"https://eur-lex.europa.eu/legal-content/{self.language}"
+            f"/TXT/?uri=CELEX:{self.celex_id}"
+        )
 
     @property
     def longer_than_wikidata_support(self) -> bool:
@@ -58,11 +69,9 @@ class Title(BaseModel):
 
     @property
     def accepted_title(self) -> bool:
-        """We accept scores over 0.4 for mt and 0.7 for all others"""
+        """We accept scores over 0.4 for all languages"""
         if self.languages_match:
-            if self.detected_language == "mt" and self.score > 0.4:
-                return True
-            elif self.detected_language != "mt" and self.score > 0.7:
+            if self.score > 0.4:
                 return True
         return False
 
@@ -73,7 +82,7 @@ class LawItem(BaseModel):
     wbi: WikibaseIntegrator
     item_id: str
     celex_id: str
-    titles: List[Title] = list()
+    accepted_titles: List[Title] = list()
     languages: List[str] = [
         "BG",
         "ES",
@@ -111,20 +120,28 @@ class LawItem(BaseModel):
     def enrich_wikidata(self):
         self.item = self.wbi.item.get(entity_id=self.item_id)
         print(self.item.get_entity_url())
-        self.iterate_languages()
+        self.add_labels_and_aliases()
+        self.add_name_statements()
         if self.something_to_upload:
             input("press enter to upload")
             self.item.write(
-                summary="Adding labels and aliases " "with WikidataEurLexScraper"
+                summary="Adding names with [[Wikidata:Tools/WikidataEurLexScraper|WikidataEurLexScraper]]"
             )
 
-    def iterate_languages(self):
+    def add_name_statements(self):
+        print("Adding name-statements")
+        for title in self.accepted_titles:
+            self.something_to_upload = True
+            self.add_name_claim(title=title)
+
+    def add_labels_and_aliases(self):
+        print("Adding labels and aliases")
         for language in self.languages:
             language_lower = language.lower()
             title_already_in_wikidata = False
             title_for_this_language = None
             has_label = False
-            for title in self.titles:
+            for title in self.accepted_titles:
                 if title.language == language:
                     if title.longer_than_wikidata_support:
                         logger.info(f"title too long: '{title.title}'")
@@ -165,6 +182,24 @@ class LawItem(BaseModel):
                 else:
                     logger.info("this title is already in Wikidata")
 
+    def add_name_claim(self, title: Title):
+        # logger.info("Add name statement")
+        self.item.claims.add(claims=[MonolingualText(
+                prop_nr="P1448",  # official name
+                language=title.language.lower(),
+                text=title.title,
+                references=References().add(
+                    URL(
+                        prop_nr="P854",  # reference URL
+                        value=title.eurlex_url,
+                        qualifiers=Qualifiers().add(Time(prop_nr="P813",  # retrieved
+                                                         time="now")),
+                    )
+                ),
+            )],
+            action_if_exists=ActionIfExists.KEEP,
+        )
+
     def scrape_law_titles(self):
         print(f"Fetching law titles for {self.celex_id}")
         for language in self.languages:
@@ -186,10 +221,12 @@ class LawItem(BaseModel):
                 law_title = soup.select_one("p#title").get_text(strip=True)
                 # Guard against None
                 if law_title and law_title is not None:
-                    title = Title(title=law_title, language=language)
+                    title = Title(
+                        title=law_title, language=language, celex_id=self.celex_id
+                    )
                     title.detect_language()
                     if title.accepted_title:
-                        self.titles.append(title)
+                        self.accepted_titles.append(title)
                 else:
                     raise ValueError(f"no law title found, see {url}")
             else:
