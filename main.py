@@ -246,6 +246,7 @@ class EurlexScraper(BaseModel):
     """
     items: List[LawItem] = []
     wbi: WikibaseIntegrator
+    max: int = 0
 
     class Config:
         arbitrary_types_allowed = True
@@ -269,14 +270,20 @@ class EurlexScraper(BaseModel):
             self.items.append(LawItem(item_id=item_id, celex_id=celex_id, wbi=self.wbi))
 
     def iterate_items(self):
+        count = 0
         for item in self.items:
-            item_id = int(item.item_id[1:])
-            if not self.already_processed(item_id=item_id):
-                item.start()
-                self.add_item_id_to_database(item_id=item_id)
-                # exit()
+            if count >= self.max:
+                print("Reached max number of items to work on. Stopping")
+                break
             else:
-                print(f"{item.item_id} has already been processed")
+                item_id = int(item.item_id[1:])
+                if not self.already_processed(item_id=item_id):
+                    item.start()
+                    self.add_item_id_to_database(item_id=item_id)
+                    count += 1
+                    # exit()
+                else:
+                    print(f"{item.item_id} has already been processed")
 
     def already_processed(self, item_id) -> bool:
         self.cursor.execute(
@@ -335,5 +342,5 @@ class EurlexScraper(BaseModel):
 wbi = WikibaseIntegrator(
     login=Login(user=config.user_name, password=config.bot_password)
 )
-scraper = EurlexScraper(wbi=wbi)
+scraper = EurlexScraper(wbi=wbi, max=1)
 scraper.start()
