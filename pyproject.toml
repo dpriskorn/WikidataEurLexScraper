@@ -11,7 +11,9 @@ python = ">=3.11,<3.13"
 pydantic = "^2.5.2"
 beautifulsoup4 = "^4.12.2"
 requests = "^2.31.0"
-wikibaseintegrator = "^0.12.4"
+# This fixes https://github.com/dpriskorn/WikidataEurLexScraper/issues/2
+wikibaseintegrator = { git = "https://github.com/LeMyst/WikibaseIntegrator.git", branch = "merge-ref-or-append"}
+#wikibaseintegrator = "^0.12.4"
 fasttext-langdetect = { git = "https://github.com/dpriskorn/fasttext-langdetect.git", branch = "main"}
 
 [tool.poetry.group.dev.dependencies]
