@@ -62,7 +62,7 @@ class LawItem(BaseModel):
         self.add_labels_and_aliases()
         self.add_name_statements()
         if self.something_to_upload:
-            pprint(self.item.get_json())
+            # pprint(self.item.get_json())
             input("press enter to upload")
             self.item.write(
                 summary="Adding names with [[Wikidata:Tools/WikidataEurLexScraper|WikidataEurLexScraper]]"
