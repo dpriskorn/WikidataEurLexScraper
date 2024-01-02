@@ -15,6 +15,7 @@ requests = "^2.31.0"
 wikibaseintegrator = { git = "https://github.com/LeMyst/WikibaseIntegrator.git", branch = "merge-ref-or-append"}
 #wikibaseintegrator = "^0.12.4"
 fasttext-langdetect = { git = "https://github.com/dpriskorn/fasttext-langdetect.git", branch = "main"}
+pyeurlex = "^0.2.9"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.12.0"
