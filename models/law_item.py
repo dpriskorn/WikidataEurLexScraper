@@ -1,3 +1,4 @@
+import logging
 from pprint import pprint
 from typing import List
 
@@ -10,9 +11,9 @@ from wikibaseintegrator.entities import ItemEntity
 from wikibaseintegrator.models import Reference, References
 from wikibaseintegrator.wbi_enums import ActionIfExists
 
-from main import logger
 from models.title import Title
 
+logger = logging.getLogger(__name__)
 
 class LawItem(BaseModel):
     something_to_upload: bool = False
@@ -67,6 +68,7 @@ class LawItem(BaseModel):
                 summary="Adding names with [[Wikidata:Tools/WikidataEurLexScraper|WikidataEurLexScraper]]"
             )
             print(self.item.get_entity_url())
+            input("press enter to continue")
 
     def add_name_statements(self):
         print("Adding name-statements")

@@ -128,5 +128,5 @@ class EurlexScraper(BaseModel):
 wbi = WikibaseIntegrator(
     login=Login(user=config.user_name, password=config.bot_password)
 )
-scraper = EurlexScraper(wbi=wbi, max=1)
+scraper = EurlexScraper(wbi=wbi, max=10)
 scraper.start()

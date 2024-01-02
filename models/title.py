@@ -1,8 +1,9 @@
+import logging
+
 from ftlangdetect import detect
 from pydantic import BaseModel
 
-from main import logger
-
+logger = logging.getLogger(__name__)
 
 class Title(BaseModel):
     title: str
