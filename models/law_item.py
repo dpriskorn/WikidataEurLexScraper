@@ -1,5 +1,4 @@
 import logging
-from pprint import pprint
 from typing import List
 
 import requests
@@ -61,7 +60,7 @@ class LawItem(BaseModel):
         self.item = self.wbi.item.get(entity_id=self.item_id)
         print(self.item.get_entity_url())
         self.add_labels_and_aliases()
-        self.add_name_statements()
+        self.add_title_statements()
         if self.something_to_upload:
             # pprint(self.item.get_json())
             if config.press_enter_to_continue:
@@ -73,11 +72,11 @@ class LawItem(BaseModel):
             if config.press_enter_to_continue:
                 input("press enter to continue")
 
-    def add_name_statements(self):
-        print("Adding name-statements")
+    def add_title_statements(self):
+        print("Adding title-statements")
         for title in self.accepted_titles:
             self.something_to_upload = True
-            self.add_name_claim(title=title)
+            self.add_title_claim(title=title)
 
     def add_labels_and_aliases(self):
         print("Adding labels and aliases")
@@ -127,13 +126,13 @@ class LawItem(BaseModel):
                 else:
                     logger.info("this title is already in Wikidata")
 
-    def add_name_claim(self, title: Title):
+    def add_title_claim(self, title: Title):
         reference = Reference()
         reference.add(URL(prop_nr="P854", value=title.eurlex_url))  # reference URL
         reference.add(Time(prop_nr="P813", time="now"))  # retrieved
         references = References().add(reference)
         name_claim = MonolingualText(
-            prop_nr="P1448",  # official name
+            prop_nr="P1476",  # title
             language=title.language.lower(),
             text=title.title,
             references=references,
