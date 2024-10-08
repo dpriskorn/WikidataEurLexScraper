@@ -7,3 +7,4 @@ user_agent = f"wikidataeurlexscraper, see https://github.com/dpriskorn/WikidataE
 
 loglevel = logging.INFO
 press_enter_to_continue = True
+title_property_id = "P1476"

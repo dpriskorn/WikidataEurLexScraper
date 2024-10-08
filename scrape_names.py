@@ -4,6 +4,7 @@ query https://query.wikidata.org/#SELECT%20%28COUNT%28%3Fitem%29%20AS%20%3Fcount
 There are 4594 items with this identifier right now.
 It currently only scrapes the name of the law"""
 import logging
+import random
 import sqlite3
 from typing import List, Any
 
@@ -33,6 +34,7 @@ class EurlexScraper(BaseModel):
     items: List[LawItem] = []
     wbi: WikibaseIntegrator
     max: int = 0
+    edit_groups_hash: str = "{:x}".format(random.randrange(0, 2**48))
 
     class Config:
         arbitrary_types_allowed = True
@@ -53,7 +55,14 @@ class EurlexScraper(BaseModel):
         for result in query["results"]["bindings"]:
             item_id = self.get_stripped_qid(item_id=str(result["item"]["value"]))
             celex_id = result["celex_id"]["value"]
-            self.items.append(LawItem(item_id=item_id, celex_id=celex_id, wbi=self.wbi))
+            self.items.append(
+                LawItem(
+                    item_id=item_id,
+                    celex_id=celex_id,
+                    wbi=self.wbi,
+                    edit_groups_hash=self.edit_groups_hash,
+                )
+            )
 
     def iterate_items(self):
         count = 0
