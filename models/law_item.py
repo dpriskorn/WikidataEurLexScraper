@@ -1,17 +1,21 @@
 import logging
-from typing import List, Set
+from typing import List, Set, Pattern
 
 import requests
 from bs4 import BeautifulSoup, SoupStrainer
 from pydantic import BaseModel
+from rdflib.plugins.parsers.notation3 import langcode
+from rdflib.plugins.sparql.parserutils import value
 from wikibaseintegrator import WikibaseIntegrator
-from wikibaseintegrator.datatypes import URL, Time, MonolingualText
+from wikibaseintegrator.datatypes import URL, Time, MonolingualText, Item
 from wikibaseintegrator.entities import ItemEntity
 from wikibaseintegrator.models import Reference, References, Claim
-from wikibaseintegrator.wbi_enums import ActionIfExists
+from wikibaseintegrator.wbi_enums import ActionIfExists, WikibaseDatePrecision
 
 import config
 from models.title import Title
+import re
+
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +55,8 @@ class LawItem(BaseModel):
         "SV",
     ]
     disabled_languages: Set[str] = set()
+    euid_pattern: Pattern = re.compile(r"(\(EU\) \d{4}/\d{1,5})")
+    euid: str = ""
 
     class Config:
         arbitrary_types_allowed = True
@@ -87,13 +93,15 @@ class LawItem(BaseModel):
         self.item = self.wbi.item.get(entity_id=self.item_id)
         print(self.item.get_entity_url())
         self.add_labels_and_aliases()
+        self.extract_and_add_euid()
         self.add_title_statements()
         if self.something_to_upload:
             # pprint(self.item.get_json())
             if config.press_enter_to_continue:
                 input("press enter to upload")
+            logger.info("Uploading now")
             self.item.write(
-                summary=f"Adding titles with [[Wikidata:Tools/WikidataEurLexScraper|WikidataEurLexScraper]] ([[:toolforge:editgroups/b/CB/{self.edit_groups_hash}|details]]) see [[Wikidata:Requests_for_permissions/Bot/So9qBot_8|bot_task]]"
+                summary=f"Adding titles, lables and alises with [[Wikidata:Tools/WikidataEurLexScraper|WikidataEurLexScraper]] ([[:toolforge:editgroups/b/CB/{self.edit_groups_hash}|details]]) see [[Wikidata:Requests_for_permissions/Bot/So9qBot_8|bot_task]]"
             )
             print(self.item.get_entity_url())
             if config.press_enter_to_continue:
@@ -138,6 +146,29 @@ class LawItem(BaseModel):
                 )
                 self.something_to_upload = True
                 self.add_title_claim(title=title)
+
+    def add_euid_as_mul_alias(self):
+        if self.euid:
+            # We add also the shortened form to help users find laws more easily in Wikidata
+            short_euid = self.euid.replace("(EU) ", "")
+            self.item.aliases.set(language="mul", values=[self.euid, short_euid])
+
+    def extract_and_add_euid(self):
+        self.extract_euid_from_en_description()
+        self.add_euid_as_mul_alias()
+
+    def extract_euid_from_en_description(self):
+        # cast to LanguageValue to string
+        endesc = str(self.item.descriptions.get(language="en"))
+        logger.info(endesc)
+
+        # Search for the first match
+        match = re.search(self.euid_pattern, endesc)
+
+        # Output the first match
+        if match:
+            self.euid = match.group(0)
+            logger.info(self.euid)
 
     def add_labels_and_aliases(self):
         print("Adding labels and aliases")
@@ -190,7 +221,8 @@ class LawItem(BaseModel):
     def add_title_claim(self, title: Title):
         reference = Reference()
         reference.add(URL(prop_nr="P854", value=title.eurlex_url))  # reference URL
-        reference.add(Time(prop_nr="P813", time="now"))  # retrieved
+        reference.add(Time(prop_nr="P813", time="now", precision=WikibaseDatePrecision.DAY))  # retrieved + date
+        reference.add(Item(prop_nr="248", value="Q1276282")) # stated in EUR-Lex
         references = References().add(reference)
         name_claim = MonolingualText(
             prop_nr=config.title_property_id,  # title
