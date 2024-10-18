@@ -73,6 +73,7 @@ class EurlexScraper(BaseModel):
             else:
                 item_id = int(item.item_id[1:])
                 if not self.already_processed(item_id=item_id):
+                    print(f"Processing item {count+1}")
                     item.start()
                     self.add_item_id_to_database(item_id=item_id)
                     count += 1
