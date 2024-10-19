@@ -1,5 +1,4 @@
 import logging
-from enum import Enum
 from typing import List, Set, Pattern
 
 import aiohttp
@@ -20,6 +19,8 @@ import re
 
 logger = logging.getLogger(__name__)
 
+class Euid_not_found(BaseException):
+    pass
 
 # For now we only support EU
 # class LegalDomain(Enum):
@@ -253,6 +254,9 @@ class LawItem(BaseModel):
         if match:
             self.euid = match.group(0)
             logger.info(self.euid)
+        else:
+            # todo implement support for Euratom and CFSP
+            raise Euid_not_found(endesc)
 
     def add_labels_and_aliases(self):
         print("Adding labels and aliases")
