@@ -1,11 +1,11 @@
 import logging
 from typing import List, Set, Pattern
 
+import aiohttp
+import asyncio
 import requests
 from bs4 import BeautifulSoup, SoupStrainer
 from pydantic import BaseModel
-from rdflib.plugins.parsers.notation3 import langcode
-from rdflib.plugins.sparql.parserutils import value
 from wikibaseintegrator import WikibaseIntegrator
 from wikibaseintegrator.datatypes import URL, Time, MonolingualText, Item
 from wikibaseintegrator.entities import ItemEntity
@@ -86,7 +86,7 @@ class LawItem(BaseModel):
 
     def start(self):
         self.get_disabled_languages()
-        self.scrape_law_titles()
+        asyncio.run(self.scrape_law_titles())
         self.enrich_wikidata()
 
     def enrich_wikidata(self):
@@ -237,33 +237,43 @@ class LawItem(BaseModel):
             action_if_exists=ActionIfExists.MERGE_REFS_OR_APPEND,
         )
 
-    def scrape_law_titles(self):
+
+    async def scrape_law_titles(self):
         print(f"Fetching law titles for {self.celex_id}")
         available_languages = set(self.languages) - self.disabled_languages
-        for language in available_languages:
-            # Construct the URL based on the CELEX identifier
-            url = (
-                f"https://eur-lex.europa.eu/legal-content/{language}"
-                f"/TXT/?uri=CELEX:{self.celex_id}"
-            )
-            logger.info(f"Fetching {url}")
-            # Send a GET request to the URL
-            response = requests.get(url)
 
-            # Check if the request was successful (status code 200)
-            if response.status_code == 200:
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+            for language in available_languages:
+                # Construct the URL based on the CELEX identifier
+                url = (
+                    f"https://eur-lex.europa.eu/legal-content/{language}"
+                    f"/TXT/?uri=CELEX:{self.celex_id}"
+                )
+                logger.info(f"Fetching {url}")
+                tasks.append(self.fetch_title(session, url, language))
+
+            # Wait for all the tasks to complete
+            await asyncio.gather(*tasks)
+
+    async def fetch_title(self, session, url, language):
+        # Send a GET request to the URL
+        async with session.get(url) as response:
+            if response.status == 200:
                 # Parse the HTML content using BeautifulSoup
-                soup = BeautifulSoup(response.content, "lxml")
+                content = await response.text()
+                soup = BeautifulSoup(content, "lxml")
 
                 # Find the element containing the law title using the provided jQuery selector
                 law_title = soup.select_one("p#title").get_text(strip=True)
+
                 # Guard against None
-                if law_title and law_title is not None:
+                if law_title:
                     title = Title(
                         value=law_title, language=language, celex_id=self.celex_id
                     )
                     self.accepted_titles.append(title)
                 else:
-                    raise ValueError(f"no law title found, see {url}")
+                    raise ValueError(f"No law title found, see {url}")
             else:
-                logger.info(f"got {response.status_code} from eur-lex")
+                logger.info(f"Got {response.status} from eur-lex")
