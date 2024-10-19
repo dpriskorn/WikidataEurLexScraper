@@ -180,7 +180,7 @@ class LawItem(BaseModel):
                 input("press enter to upload")
             logger.info("Uploading now")
             self.item.write(
-                summary=f"Adding titles, lables and alises with [[Wikidata:Tools/WikidataEurLexScraper|WikidataEurLexScraper]] ([[:toolforge:editgroups/b/CB/{self.edit_groups_hash}|details]]) see [[Wikidata:Requests_for_permissions/Bot/So9qBot_8|bot_task]]"
+                summary=f"Adding titles, labels and aliases with [[Wikidata:Tools/WikidataEurLexScraper|WikidataEurLexScraper]] ([[:toolforge:editgroups/b/CB/{self.edit_groups_hash}|details]]) see [[Wikidata:Requests_for_permissions/Bot/So9qBot_8|bot_task]]"
             )
             print(self.item.get_entity_url())
             if config.press_enter_to_continue:
