@@ -1,4 +1,5 @@
 import logging
+from enum import Enum
 from typing import List, Set, Pattern
 
 import aiohttp
@@ -18,6 +19,83 @@ import re
 
 
 logger = logging.getLogger(__name__)
+
+
+# For now we only support EU
+# class LegalDomain(Enum):
+#     """See list at https://www.wikidata.org/wiki/Wikidata:WikiProject_European_Union/Data_models"""
+#     EU = "EU"
+#     EURATOM = ""
+
+# Constants
+EU_LANGUAGES = [
+"bg",
+"cs",
+"da",
+"de",
+"el",
+"et",
+"en",
+"es",
+"fr",
+"ga",
+"hr",
+"it",
+"lv",
+"lt",
+"hu",
+"mt",
+"nl",
+"pl",
+"pt",
+"ro",
+"sk",
+"sl",
+"fi",
+"sv",
+]
+EU_LOCALIZATIONS = dict(
+    # we leave out values that are "EU"
+    bg="ЕС",
+    el="ΕΕ",
+    et="EL",
+    es="UE",
+    fr="UE",
+    ga="AE",
+    it="UE",
+    lv="ES",
+    lt="ES",
+    mt="UE",
+    pl="UE",
+    pt="UE",
+    ro="UE",
+    sk="EÚ",
+)
+
+
+class Euid(BaseModel):
+    """This models a quasi id that we call EUID.
+    It comes in 3 known forms:
+    * long EUID with parens e.g. "(EU) 2023/138"
+    * long EUID without parens e.g. "EU 2023/138"
+    * short EUID without the legal domain e.g. "2023/138"
+
+    This class models localization of the long form
+    """
+    value: str # english value e.g. (EU) 2023/138
+    lang: str
+
+    @property
+    def localized_value(self) -> str:
+        if self.lang in EU_LOCALIZATIONS:
+            localized_domain = EU_LOCALIZATIONS[self.lang]
+            return self.value.replace("EU", localized_domain)
+        # we don't need to localize
+        return self.value
+
+    @property
+    def localized_without_parens(self):
+        return self.localized_value.replace("(", "").replace(")", "")
 
 
 class LawItem(BaseModel):
@@ -147,15 +225,21 @@ class LawItem(BaseModel):
                 self.something_to_upload = True
                 self.add_title_claim(title=title)
 
-    def add_euid_as_mul_alias(self):
+    def add_short_euid_as_mul_alias(self):
         if self.euid:
             # We add also the shortened form to help users find laws more easily in Wikidata
             short_euid = self.euid.replace("(EU) ", "")
-            self.item.aliases.set(language="mul", values=[self.euid, short_euid])
+            self.item.aliases.set(language="mul", values=[short_euid])
+
+    def add_localized_long_euids_to_aliases(self):
+        for lang in EU_LANGUAGES:
+            euid = Euid(value=self.euid, lang=lang)
+            self.item.aliases.set(language=lang, values=[euid.localized_value, euid.localized_without_parens])
 
     def extract_and_add_euid(self):
         self.extract_euid_from_en_description()
-        self.add_euid_as_mul_alias()
+        self.add_short_euid_as_mul_alias()
+        self.add_localized_long_euids_to_aliases()
 
     def extract_euid_from_en_description(self):
         # cast to LanguageValue to string
