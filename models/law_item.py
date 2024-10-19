@@ -28,33 +28,61 @@ class Euid_not_found(BaseException):
 #     EU = "EU"
 #     EURATOM = ""
 
+# languages: List[str] = [
+#     "BG",
+#     "ES",
+#     "CS",
+#     "DA",
+#     "DE",
+#     "ET",
+#     "EL",
+#     "EN",
+#     "FR",
+#     "GA",
+#     "HR",
+#     "IT",
+#     "LV",
+#     "LT",
+#     "HU",
+#     "MT",
+#     "NL",
+#     "PL",
+#     "PT",
+#     "RO",
+#     "SK",
+#     "SL",
+#     "FI",
+#     "SV",
+# ]
+
 # Constants
 EU_LANGUAGES = [
-"bg",
-"cs",
-"da",
-"de",
-"el",
-"et",
-"en",
-"es",
-"fr",
-"ga",
-"hr",
-"it",
-"lv",
-"lt",
-"hu",
-"mt",
-"nl",
-"pl",
-"pt",
-"ro",
-"sk",
-"sl",
-"fi",
-"sv",
+    "bg",
+    "cs",
+    "da",
+    "de",
+    "el",
+    "et",
+    "en",
+    "es",
+    "fr",
+    "ga",
+    "hr",
+    "it",
+    "lv",
+    "lt",
+    "hu",
+    "mt",
+    "nl",
+    "pl",
+    "pt",
+    "ro",
+    "sk",
+    "sl",
+    "fi",
+    "sv",
 ]
+
 EU_LOCALIZATIONS = dict(
     # we leave out values that are "EU"
     bg="ЕС",
@@ -107,32 +135,6 @@ class LawItem(BaseModel):
     item_id: str
     celex_id: str
     accepted_titles: List[Title] = list()
-    languages: List[str] = [
-        "BG",
-        "ES",
-        "CS",
-        "DA",
-        "DE",
-        "ET",
-        "EL",
-        "EN",
-        "FR",
-        "GA",
-        "HR",
-        "IT",
-        "LV",
-        "LT",
-        "HU",
-        "MT",
-        "NL",
-        "PL",
-        "PT",
-        "RO",
-        "SK",
-        "SL",
-        "FI",
-        "SV",
-    ]
     disabled_languages: Set[str] = set()
     euid_pattern: Pattern = re.compile(r"(\(EU\) \d{4}/\d{1,5})")
     euid: str = ""
@@ -159,8 +161,8 @@ class LawItem(BaseModel):
         for item in dropdown_items:
             span = item.find("span")
             if span:
-                lang_code = span.text.strip()
-                if lang_code in self.languages:
+                lang_code = span.text.lower().strip()
+                if lang_code in EU_LANGUAGES:
                     self.disabled_languages.add(lang_code)
 
     def start(self):
@@ -214,7 +216,7 @@ class LawItem(BaseModel):
                 claim_lang = self.monotext_language(claim=claim)
                 # logger.info(f"found title claim with lang: {claim_lang}")
                 if (
-                    claim_lang == title.language.lower()
+                    claim_lang == title.language
                     and title.value == self.monotext_text(claim=claim)
                 ):
                     logger.info(f"found title already present with lang: {claim_lang}")
@@ -277,8 +279,7 @@ class LawItem(BaseModel):
 
     def add_labels_and_aliases(self):
         print("Adding labels and aliases")
-        for language in self.languages:
-            language_lower = language.lower()
+        for language in EU_LANGUAGES:
             title_already_in_wikidata = False
             title_for_this_language = None
             has_label = False
@@ -289,18 +290,18 @@ class LawItem(BaseModel):
                     else:
                         title_for_this_language = title
             if title_for_this_language is not None:
-                label = self.item.labels.get(language=language.lower())
+                label = self.item.labels.get(language=language)
                 if label:
                     has_label = True
                     if label == title_for_this_language.value:
                         logger.info(
-                            f"label for {language_lower} in "
+                            f"label for {language} in "
                             "wikidata mathches the title, skipping this language"
                         )
                         title_already_in_wikidata = True
                     if not title_already_in_wikidata:
-                        logger.info(f"checking {language_lower} aliases")
-                        aliases = self.item.aliases.get(language=language_lower)
+                        logger.info(f"checking {language} aliases")
+                        aliases = self.item.aliases.get(language=language)
                         if aliases:
                             logger.info(aliases)
                             for alias in aliases:
@@ -312,13 +313,13 @@ class LawItem(BaseModel):
                     if not has_label:
                         # add as label
                         self.item.labels.set(
-                            value=title_for_this_language.value, language=language_lower
+                            value=title_for_this_language.value, language=language
                         )
                     else:
                         # add as alias
                         self.item.aliases.set(
                             values=[title_for_this_language.value],
-                            language=language_lower,
+                            language=language,
                         )
                 else:
                     logger.info("this title is already in Wikidata")
@@ -331,7 +332,7 @@ class LawItem(BaseModel):
         references = References().add(reference)
         name_claim = MonolingualText(
             prop_nr=config.title_property_id,  # title
-            language=title.language.lower(),
+            language=title.language,
             text=title.value,
             references=references,
         )
@@ -345,7 +346,7 @@ class LawItem(BaseModel):
 
     async def scrape_law_titles(self):
         print(f"Fetching law titles for {self.celex_id}")
-        available_languages = set(self.languages) - self.disabled_languages
+        available_languages = set(EU_LANGUAGES) - self.disabled_languages
 
         async with aiohttp.ClientSession() as session:
             tasks = []
