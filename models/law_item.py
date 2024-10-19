@@ -173,6 +173,7 @@ class LawItem(BaseModel):
         print(self.item.get_entity_url())
         self.add_labels_and_aliases()
         self.extract_and_add_euid()
+        self.extract_eecid_from_title_and_add_to_alias()
         self.add_title_statements()
         if self.something_to_upload:
             # pprint(self.item.get_json())
@@ -238,21 +239,37 @@ class LawItem(BaseModel):
             self.item.aliases.set(language=lang, values=[euid.localized_value, euid.localized_without_parens])
 
     def extract_and_add_euid(self):
-        self.extract_euid_from_en_description()
+        self.extract_euid_from_item()
         self.add_short_euid_as_mul_alias()
         self.add_localized_long_euids_to_aliases()
 
-    def extract_euid_from_en_description(self):
+    def extract_eecid_from_title_and_add_to_alias(self):
+        for title in self.accepted_titles:
+            eecid = title.extract_eecid
+            if eecid:
+                self.something_to_upload = True
+                self.item.aliases.set(language=title.language, values=[eecid])
+                logger.info(f"found eecid: {eecid} for {title.language}")
+
+    def extract_euid_from_item(self):
         # cast to LanguageValue to string
         endesc = str(self.item.descriptions.get(language="en"))
         logger.info(endesc)
+        # in some items it is in the label like https://www.wikidata.org/wiki/Q123701183
+        # cast to LanguageValue to string
+        enlabel = str(self.item.labels.get(language="en"))
+        logger.info(enlabel)
 
         # Search for the first match
-        match = re.search(self.euid_pattern, endesc)
+        d_match = re.search(self.euid_pattern, endesc)
+        l_match = re.search(self.euid_pattern, enlabel)
 
         # Output the first match
-        if match:
-            self.euid = match.group(0)
+        if d_match:
+            self.euid = d_match.group(0)
+            logger.info(self.euid)
+        elif l_match:
+            self.euid = l_match.group(0)
             logger.info(self.euid)
         else:
             # todo implement support for Euratom and CFSP
