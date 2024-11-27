@@ -278,51 +278,64 @@ class LawItem(BaseModel):
             raise Euid_not_found(endesc)
 
     def add_labels_and_aliases(self):
+        """This method adds both shortnames as labels and full titles as alias"""
         print("Adding labels and aliases")
         for language in EU_LANGUAGES:
-            title_already_in_wikidata = False
-            title_for_this_language = None
+            full_title_already_in_alias = False
+            shortname_without_institution_already_in_wikidata_label = False
+            shortname_with_institution_already_in_alias = False
+            shortname_without_institution_already_in_alias = False
+            title_that_can_be_added = None
             has_label = False
             for title in self.accepted_titles:
                 if title.language == language:
                     if title.longer_than_wikidata_support:
                         logger.info(f"title too long: '{title.value}'")
                     else:
-                        title_for_this_language = title
-            if title_for_this_language is not None:
+                        title_that_can_be_added = title
+            if title_that_can_be_added is not None:
                 label = self.item.labels.get(language=language)
                 if label:
                     has_label = True
-                    if label == title_for_this_language.value:
+                    if label == title_that_can_be_added.shortname_without_institution:
                         logger.info(
                             f"label for {language} in "
-                            "wikidata mathches the title, skipping this language"
+                            "wikidata mathches the shortname, skipping this language"
                         )
-                        title_already_in_wikidata = True
-                    if not title_already_in_wikidata:
-                        logger.info(f"checking {language} aliases")
-                        aliases = self.item.aliases.get(language=language)
-                        if aliases:
-                            logger.info(aliases)
-                            for alias in aliases:
-                                if alias == title_for_this_language.value:
-                                    title_already_in_wikidata = True
-                if not title_already_in_wikidata:  # and title_for_this_language.title
+                        shortname_without_institution_already_in_wikidata_label = True
+                    logger.info(f"checking {language} aliases")
+                    aliases = self.item.aliases.get(language=language)
+                    if aliases:
+                        logger.info(aliases)
+                        for alias in aliases:
+                            if alias == title_that_can_be_added.value:
+                                full_title_already_in_alias = True
+                            if alias == title_that_can_be_added.shortname_with_institution:
+                                shortname_with_institution_already_in_alias = True
+                            if alias == title_that_can_be_added.shortname_without_institution:
+                                shortname_without_institution_already_in_alias = True
+                if not full_title_already_in_alias or not shortname_without_institution_already_in_wikidata_label or not shortname_with_institution_already_in_alias:  # and title_for_this_language.title
                     self.something_to_upload = True
-                    # we are missing this data in Wikidata, lets add it
+                    # we are missing data in Wikidata, lets add it
                     if not has_label:
                         # add as label
                         self.item.labels.set(
-                            value=title_for_this_language.value, language=language
+                            value=title_that_can_be_added.shortname_without_institution, language=language
                         )
-                    else:
+                    if not shortname_with_institution_already_in_alias:
                         # add as alias
                         self.item.aliases.set(
-                            values=[title_for_this_language.value],
+                            values=[title_that_can_be_added.shortname_with_institution],
+                            language=language,
+                        )
+                    if has_label and not shortname_without_institution_already_in_alias:
+                        # add as alias and let the contributors shuffle them around later if they want
+                        self.item.aliases.set(
+                            values=[title_that_can_be_added.shortname_without_institution],
                             language=language,
                         )
                 else:
-                    logger.info("this title is already in Wikidata")
+                    logger.info("Wikidata already has the shortname as label and title in an alias")
 
     def add_title_claim(self, title: Title):
         reference = Reference()
