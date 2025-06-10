@@ -10,7 +10,7 @@ readme = "README.md"
 python = ">=3.11,<3.13"
 pydantic = "^2.5.2"
 beautifulsoup4 = "^4.12.2"
-requests = "^2.31.0"
+requests = "^2.32.4"
 wikibaseintegrator = "^0.12.8"
 # fasttext-langdetect = { git = "https://github.com/dpriskorn/fasttext-langdetect.git", branch = "main"}
 # pyeurlex = "^0.2.9"
